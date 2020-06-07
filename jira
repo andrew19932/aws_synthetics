@@ -1,0 +1,88 @@
+var synthetics = require('Synthetics');
+var AWS = require('aws-sdk'),
+    region = "eu-west-1";
+
+var client = new AWS.SecretsManager({region: region});
+const log = require('SyntheticsLogger');
+
+function getAwsSecret(secretName) {
+    return client.getSecretValue({ SecretId: secretName }).promise();
+}
+
+// Create a async function to use the Promise
+// Top level await is a proposal
+async function getAwsSecretAsync (secretName) {
+    var error;
+    var response = await getAwsSecret(secretName).catch(err => (error = err));
+    return [error, response];
+}
+
+
+
+const flowBuilderBlueprint = async function () {
+    let url = "https://jira.wolterskluwer.io/jira/login.jsp";
+
+
+    let secret = await synthetics.executeStep('load creds', async function (timeoutInMillis = 30000) {
+        var [error, secret] = await getAwsSecretAsync('username');
+        return JSON.parse(secret.SecretString);
+    });
+    let page = await synthetics.getPage();
+    log.info(secret);
+    await synthetics.executeStep('navigateToUrl', async function (timeoutInMillis = 30000) {
+        await page.goto(url, {waitUntil: ['load', 'networkidle0'], timeout: timeoutInMillis});
+    });
+    // Execute customer steps
+    await synthetics.executeStep('customerActions', async function () {
+        await page.type("[name='os_username']", secret.username);
+        try {
+            await synthetics.takeScreenshot("input", 'result');
+        } catch (ex) {
+            synthetics.addExecutionError('Unable to capture screenshot.', ex);
+        }
+
+        await page.type("[name='os_password']", secret.password);
+        try {
+            await synthetics.takeScreenshot("input", 'result');
+        } catch (ex) {
+            synthetics.addExecutionError('Unable to capture screenshot.', ex);
+        }
+
+        await page.waitForSelector("[id='login-form-submit']", {timeout: 30000});
+        await page.click("[id='login-form-submit']");
+        try {
+            await synthetics.takeScreenshot("click", 'result');
+        } catch (ex) {
+            synthetics.addExecutionError('Unable to capture screenshot.', ex);
+        }
+
+        // await page.waitForSelector("[id='repositories-menu-trigger']", {timeout: 30000});
+        // await page.click("[id='repositories-menu-trigger']");
+        // try {
+        //     await synthetics.takeScreenshot("click", 'result');
+        // } catch (ex) {
+        //     synthetics.addExecutionError('Unable to capture screenshot.', ex);
+        // }
+
+        // await page.waitForSelector("[class='item-wrapper']", {timeout: 30000});
+        // try {
+        //     await synthetics.takeScreenshot("verifySelector", 'result');
+        // } catch (ex) {
+        //     synthetics.addExecutionError('Unable to capture screenshot.', ex);
+        // }
+
+        await page.waitForSelector("[class='aui-page-header']", {timeout: 30000});
+        await page.click("[class='aui-page-header']");
+        try {
+            await synthetics.takeScreenshot("click", 'result');
+        } catch (ex) {
+            synthetics.addExecutionError('Unable to capture screenshot.', ex);
+        }
+
+
+    });
+
+};
+exports.handler = async () => {
+    return await flowBuilderBlueprint();
+};
