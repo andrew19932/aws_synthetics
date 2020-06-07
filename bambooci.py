@@ -69,7 +69,7 @@ const flowBuilderBlueprint = async function () {
             synthetics.addExecutionError('Unable to capture screenshot.', ex);
         }
 
-        await page.waitForSelector("[alt='Kovalenko, Andrii']", { timeout: 30000 });
+        await page.waitForSelector("[alt='Andrii']", { timeout: 30000 });
         try {
             await synthetics.takeScreenshot("verifySelector", 'result');
         } catch(ex) {
