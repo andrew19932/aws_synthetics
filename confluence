@@ -1,0 +1,81 @@
+var synthetics = require('Synthetics');
+var AWS = require('aws-sdk'),
+    region = "eu-west-1";
+
+var client = new AWS.SecretsManager({region: region});
+const log = require('SyntheticsLogger');
+
+function getAwsSecret(secretName) {
+    return client.getSecretValue({ SecretId: secretName }).promise();
+}
+
+// Create a async function to use the Promise
+// Top level await is a proposal
+async function getAwsSecretAsync (secretName) {
+    var error;
+    var response = await getAwsSecret(secretName).catch(err => (error = err));
+    return [error, response];
+}
+
+
+
+const flowBuilderBlueprint = async function () {
+    let url = "https://confluence.wolterskluwer.io/";
+
+
+    let secret = await synthetics.executeStep('load creds', async function (timeoutInMillis = 30000) {
+        var [error, secret] = await getAwsSecretAsync('username');
+        return JSON.parse(secret.SecretString);
+    });
+    let page = await synthetics.getPage();
+    log.info(secret);
+    await synthetics.executeStep('navigateToUrl', async function (timeoutInMillis = 30000) {
+        await page.goto(url, {waitUntil: ['load', 'networkidle0'], timeout: timeoutInMillis});
+    });
+    // Execute customer steps
+    await synthetics.executeStep('customerActions', async function () {
+        log.info(secret + 'test2');
+        await page.type("[id='os_username']", secret.username);
+        try {
+            await synthetics.takeScreenshot("input", 'result');
+        } catch (ex) {
+            synthetics.addExecutionError('Unable to capture screenshot.', ex);
+        }
+
+        await page.type("[id='os_password']", secret.password);
+        try {
+            await synthetics.takeScreenshot("input", 'result');
+        } catch (ex) {
+            synthetics.addExecutionError('Unable to capture screenshot.', ex);
+        }
+
+        await page.waitForSelector("[id='loginButton']", {timeout: 30000});
+        await page.click("[id='loginButton']");
+        try {
+            await synthetics.takeScreenshot("click", 'result');
+        } catch (ex) {
+            synthetics.addExecutionError('Unable to capture screenshot.', ex);
+        }
+
+        await page.waitForSelector("[id='people-directory-link']", { timeout: 30000 });
+        await page.click("[id='people-directory-link']");
+        try {
+            await synthetics.takeScreenshot("click", 'result');
+        } catch(ex) {
+            synthetics.addExecutionError('Unable to capture screenshot.', ex);
+        }
+
+        await page.waitForSelector("[data-username='admin.migration']", { timeout: 30000 });
+        try {
+            await synthetics.takeScreenshot("verifySelector", 'result');
+        } catch(ex) {
+            synthetics.addExecutionError('Unable to capture screenshot.', ex);
+        }
+
+
+    });
+
+};
+exports.handler = async () => {
+    return await flowBuilderBlueprint();
+};
